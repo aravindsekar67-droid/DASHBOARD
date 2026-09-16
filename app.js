@@ -8,6 +8,10 @@ let isAlarmSounding = false;
 let currentJointId = "J001";
 let demoModeActive = true;
 
+// Chart references
+let liveSensorsChart = null;
+let predictiveTrendChart = null;
+
 // Client Simulation State (For GitHub Pages static hosting fallback)
 let clientState = {
     conveyor_status: "RUNNING",
@@ -170,44 +174,68 @@ function updateDashboardUI(data) {
     const statusText = data.conveyor_status || "STOPPED";
     const speed = data.belt_speed_mps || 0.0;
     
-    document.getElementById("kpi-status-text").innerText = statusText;
-    document.getElementById("kpi-speed").innerText = speed.toFixed(2);
+    const kpiStatus = document.getElementById("kpi-status-text");
+    if (kpiStatus) kpiStatus.innerText = statusText;
+
+    const kpiSpeed = document.getElementById("kpi-speed");
+    if (kpiSpeed) kpiSpeed.innerText = speed.toFixed(2);
     
     const statusBadge = document.getElementById("badge-conveyor-status");
-    statusBadge.innerText = statusText;
-    statusBadge.className = "badge " + (statusText === "RUNNING" ? "badge-normal" : "badge-critical");
+    if (statusBadge) {
+        statusBadge.innerText = statusText;
+        statusBadge.className = "badge " + (statusText === "RUNNING" ? "badge-normal" : "badge-critical");
+    }
 
     const modeText = document.getElementById("system-mode-text");
-    demoModeActive = data.demo_mode;
-    document.getElementById("demo-mode-toggle").checked = demoModeActive;
-    modeText.innerText = demoModeActive ? "SYSTEM ONLINE (DEMO MODE)" : "SYSTEM ONLINE (ESP32 HARDWARE)";
+    demoModeActive = data.demo_mode ?? true;
+    const modeToggle = document.getElementById("demo-mode-toggle");
+    if (modeToggle) modeToggle.checked = demoModeActive;
+    if (modeText) modeText.innerText = demoModeActive ? "SYSTEM ONLINE (DEMO MODE)" : "SYSTEM ONLINE (ESP32 HARDWARE)";
 
     // 2. Statistics Counter
-    document.getElementById("stat-total-inspected").innerText = data.total_inspections || 0;
-    document.getElementById("stat-warnings").innerText = data.warning_count || 0;
-    document.getElementById("stat-criticals").innerText = data.critical_count || 0;
+    const statTotal = document.getElementById("stat-total-inspected");
+    if (statTotal) statTotal.innerText = data.total_inspections || 0;
+    const statWarn = document.getElementById("stat-warnings");
+    if (statWarn) statWarn.innerText = data.warning_count || 0;
+    const statCrit = document.getElementById("stat-criticals");
+    if (statCrit) statCrit.innerText = data.critical_count || 0;
 
     // 3. Latest Sensor Reading
     const latest = data.latest_reading;
     if (latest) {
         currentJointId = latest.joint_id;
-        document.getElementById("kpi-joint-id").innerText = latest.joint_id;
-        document.getElementById("kpi-rfid-tag").innerText = latest.rfid_tag_id || "RFID-E200001";
-        document.getElementById("kpi-last-time").innerText = latest.timestamp ? latest.timestamp.split(" ")[1] : "Just now";
+        const jIdElem = document.getElementById("kpi-joint-id");
+        if (jIdElem) jIdElem.innerText = latest.joint_id;
+
+        const rfidElem = document.getElementById("kpi-rfid-tag");
+        if (rfidElem) rfidElem.innerText = latest.rfid_tag_id || "RFID-E200001";
+
+        const timeElem = document.getElementById("kpi-last-time");
+        if (timeElem) timeElem.innerText = latest.timestamp ? latest.timestamp.split(" ")[1] : "Just now";
 
         // Sensor Cards
         const temp = latest.temperature_c;
         const vib = latest.vibration_g;
         const sound = latest.sound_db;
 
-        document.getElementById("kpi-temp").innerHTML = `${temp.toFixed(1)} <span class="unit">°C</span>`;
-        document.getElementById("kpi-vib").innerHTML = `${vib.toFixed(2)} <span class="unit">g</span>`;
-        document.getElementById("kpi-sound").innerHTML = `${sound.toFixed(1)} <span class="unit">dB</span>`;
+        const kTemp = document.getElementById("kpi-temp");
+        if (kTemp) kTemp.innerHTML = `${temp.toFixed(1)} <span class="unit">°C</span>`;
+
+        const kVib = document.getElementById("kpi-vib");
+        if (kVib) kVib.innerHTML = `${vib.toFixed(2)} <span class="unit">g</span>`;
+
+        const kSound = document.getElementById("kpi-sound");
+        if (kSound) kSound.innerHTML = `${sound.toFixed(1)} <span class="unit">dB</span>`;
 
         // Progress Bars
-        document.getElementById("temp-progress").style.width = `${Math.min(100, (temp / 90) * 100)}%`;
-        document.getElementById("vib-progress").style.width = `${Math.min(100, (vib / 3.5) * 100)}%`;
-        document.getElementById("sound-progress").style.width = `${Math.min(100, (sound / 110) * 100)}%`;
+        const tProg = document.getElementById("temp-progress");
+        if (tProg) tProg.style.width = `${Math.min(100, (temp / 90) * 100)}%`;
+
+        const vProg = document.getElementById("vib-progress");
+        if (vProg) vProg.style.width = `${Math.min(100, (vib / 3.5) * 100)}%`;
+
+        const sProg = document.getElementById("sound-progress");
+        if (sProg) sProg.style.width = `${Math.min(100, (sound / 110) * 100)}%`;
 
         // Health Score & Gauge
         const health = latest.health_score;
@@ -226,18 +254,23 @@ function updateDashboardUI(data) {
 
     // 4. Handle Critical Alarm Banner & Web Audio Synthesizer
     const activeAlert = data.active_alert;
-    const banner = document.getElementById("critical-alarm-banner");
+    const banner = document.getElementById("critical-alarm-banner") || document.getElementById("alarm-banner");
     
-    if (activeAlert && !activeAlert.acknowledged && (activeAlert.severity === "CRITICAL" || activeAlert.severity === "HIGH")) {
-        banner.classList.remove("hidden");
-        document.getElementById("alarm-title").innerHTML = `<i class="fa-solid fa-circle-exclamation"></i> CRITICAL ALERT: ${activeAlert.joint_id}`;
-        document.getElementById("alarm-message").innerText = activeAlert.reason;
-        
-        // Trigger Audio Siren
-        startAlarmAudio();
-    } else {
-        banner.classList.add("hidden");
-        stopAlarmAudio();
+    if (banner) {
+        if (activeAlert && !activeAlert.acknowledged && (activeAlert.severity === "CRITICAL" || activeAlert.severity === "HIGH")) {
+            banner.classList.remove("hidden");
+            const aTitle = document.getElementById("alarm-title");
+            if (aTitle) aTitle.innerHTML = `<i class="fa-solid fa-circle-exclamation"></i> CRITICAL ALERT: ${activeAlert.joint_id}`;
+            
+            const aMsg = document.getElementById("alarm-message") || document.getElementById("alarm-desc");
+            if (aMsg) aMsg.innerText = activeAlert.reason;
+            
+            // Trigger Audio Siren
+            startAlarmAudio();
+        } else {
+            banner.classList.add("hidden");
+            stopAlarmAudio();
+        }
     }
 }
 
@@ -246,38 +279,47 @@ function updateDashboardUI(data) {
 // =========================================================================
 
 function updateHealthGauge(health, risk) {
-    document.getElementById("kpi-health-score").innerText = health.toFixed(1);
+    const kHealth = document.getElementById("kpi-health-score") || document.getElementById("kpi-health-number");
+    if (kHealth) kHealth.innerText = health.toFixed(1);
     
-    const riskBadge = document.getElementById("badge-risk-level");
-    const bandText = document.getElementById("health-band-name");
-    const fillPath = document.getElementById("gauge-fill-path");
+    const riskBadge = document.getElementById("badge-risk-level") || document.getElementById("joint-status-badge");
+    const bandText = document.getElementById("health-band-name") || document.getElementById("kpi-health-band");
+    const fillPath = document.getElementById("gauge-fill-path") || document.getElementById("gauge-arc");
 
-    riskBadge.innerText = `${risk} RISK`;
+    if (riskBadge) riskBadge.innerText = `${risk} RISK`;
 
     // SVG arc stroke-dasharray is 126. Total arc offset: 126 = 0% health, 0 = 100% health
     const offset = 126 - (health / 100) * 126;
-    fillPath.style.strokeDashoffset = offset;
+    if (fillPath) fillPath.style.strokeDashoffset = offset;
 
     if (health >= 80) {
-        riskBadge.className = "badge badge-normal";
-        fillPath.style.stroke = "#10b981";
-        bandText.innerText = "NORMAL (80-100%)";
-        bandText.className = "health-band-indicator text-green";
+        if (riskBadge) riskBadge.className = "badge badge-normal";
+        if (fillPath) fillPath.style.stroke = "#10b981";
+        if (bandText) {
+            bandText.innerText = "NORMAL (80-100%)";
+            bandText.className = "health-band-indicator text-green";
+        }
     } else if (health >= 60) {
-        riskBadge.className = "badge badge-warning";
-        fillPath.style.stroke = "#f59e0b";
-        bandText.innerText = "WARNING (60-79%)";
-        bandText.className = "health-band-indicator text-yellow";
+        if (riskBadge) riskBadge.className = "badge badge-warning";
+        if (fillPath) fillPath.style.stroke = "#f59e0b";
+        if (bandText) {
+            bandText.innerText = "WARNING (60-79%)";
+            bandText.className = "health-band-indicator text-yellow";
+        }
     } else if (health >= 30) {
-        riskBadge.className = "badge badge-danger";
-        fillPath.style.stroke = "#f97316";
-        bandText.innerText = "DANGER (30-59%)";
-        bandText.className = "health-band-indicator text-yellow";
+        if (riskBadge) riskBadge.className = "badge badge-danger";
+        if (fillPath) fillPath.style.stroke = "#f97316";
+        if (bandText) {
+            bandText.innerText = "DANGER (30-59%)";
+            bandText.className = "health-band-indicator text-yellow";
+        }
     } else {
-        riskBadge.className = "badge badge-critical";
-        fillPath.style.stroke = "#ef4444";
-        bandText.innerText = "CRITICAL (0-29%)";
-        bandText.className = "health-band-indicator text-red";
+        if (riskBadge) riskBadge.className = "badge badge-critical";
+        if (fillPath) fillPath.style.stroke = "#ef4444";
+        if (bandText) {
+            bandText.innerText = "CRITICAL (0-29%)";
+            bandText.className = "health-band-indicator text-red";
+        }
     }
 }
 
@@ -286,47 +328,66 @@ function updateHealthGauge(health, risk) {
 // =========================================================================
 
 function updateCameraView(jointId, result, timestamp) {
-    document.getElementById("cam-joint-id-text").innerText = jointId;
-    document.getElementById("cam-result-text").innerText = result;
-    document.getElementById("cam-overlay-rfid").innerText = jointId;
-    document.getElementById("cam-overlay-time").innerText = `STREAM: ${timestamp || "LIVE"}`;
+    const cId = document.getElementById("cam-joint-id-text");
+    if (cId) cId.innerText = jointId;
+
+    const cRes = document.getElementById("cam-result-text");
+    if (cRes) cRes.innerText = result;
+
+    const cRfid = document.getElementById("cam-overlay-rfid");
+    if (cRfid) cRfid.innerText = jointId;
+
+    const cTime = document.getElementById("cam-overlay-time");
+    if (cTime) cTime.innerText = `STREAM: ${timestamp || "LIVE"}`;
 
     const camBadge = document.getElementById("camera-result-badge");
     const seamLine = document.getElementById("cam-seam-line");
     const seamDot = document.getElementById("cam-seam-dot");
-    const bbox = document.getElementById("cam-bbox");
-    const bboxLabel = document.getElementById("cam-bbox-label");
+    const bbox = document.getElementById("cam-bbox") || document.getElementById("cam-bounding-box");
+    const bboxLabel = document.getElementById("cam-bbox-label") || document.getElementById("cam-bounding-text");
     const aiStatus = document.getElementById("cam-ai-status");
 
-    camBadge.innerText = result;
+    if (camBadge) camBadge.innerText = result;
 
     if (result === "NORMAL") {
-        camBadge.className = "badge badge-normal";
-        seamLine.setAttribute("stroke", "#10b981");
-        seamLine.setAttribute("stroke-dasharray", "none");
-        seamDot.setAttribute("fill", "#10b981");
-        bbox.setAttribute("stroke", "#10b981");
-        bboxLabel.setAttribute("fill", "#10b981");
-        bboxLabel.textContent = "AI CONF: 98.6% NORMAL";
-        aiStatus.innerHTML = `<span class="text-green"><i class="fa-solid fa-circle-check"></i> NO DAMAGE DETECTED</span>`;
+        if (camBadge) camBadge.className = "badge badge-normal";
+        if (seamLine) {
+            seamLine.setAttribute("stroke", "#10b981");
+            seamLine.setAttribute("stroke-dasharray", "none");
+        }
+        if (seamDot) seamDot.setAttribute("fill", "#10b981");
+        if (bbox) bbox.setAttribute("stroke", "#10b981");
+        if (bboxLabel) {
+            bboxLabel.setAttribute("fill", "#10b981");
+            bboxLabel.textContent = "AI CONF: 98.6% NORMAL";
+        }
+        if (aiStatus) aiStatus.innerHTML = `<span class="text-green"><i class="fa-solid fa-circle-check"></i> NO DAMAGE DETECTED</span>`;
     } else if (result === "CRACK DETECTED") {
-        camBadge.className = "badge badge-warning";
-        seamLine.setAttribute("stroke", "#f59e0b");
-        seamLine.setAttribute("stroke-dasharray", "4,2");
-        seamDot.setAttribute("fill", "#f59e0b");
-        bbox.setAttribute("stroke", "#f59e0b");
-        bboxLabel.setAttribute("fill", "#f59e0b");
-        bboxLabel.textContent = "AI CONF: 89.2% MICRO-CRACK";
-        aiStatus.innerHTML = `<span class="text-yellow"><i class="fa-solid fa-triangle-exclamation"></i> SURFACE MICRO-CRACK</span>`;
+        if (camBadge) camBadge.className = "badge badge-warning";
+        if (seamLine) {
+            seamLine.setAttribute("stroke", "#f59e0b");
+            seamLine.setAttribute("stroke-dasharray", "4,2");
+        }
+        if (seamDot) seamDot.setAttribute("fill", "#f59e0b");
+        if (bbox) bbox.setAttribute("stroke", "#f59e0b");
+        if (bboxLabel) {
+            bboxLabel.setAttribute("fill", "#f59e0b");
+            bboxLabel.textContent = "AI CONF: 89.2% MICRO-CRACK";
+        }
+        if (aiStatus) aiStatus.innerHTML = `<span class="text-yellow"><i class="fa-solid fa-triangle-exclamation"></i> SURFACE MICRO-CRACK</span>`;
     } else if (result === "JOINT DAMAGE" || result === "JOINT SEPARATION") {
-        camBadge.className = "badge badge-critical";
-        seamLine.setAttribute("stroke", "#ef4444");
-        seamLine.setAttribute("stroke-dasharray", "8,8");
-        seamDot.setAttribute("fill", "#ef4444");
-        bbox.setAttribute("stroke", "#ef4444");
-        bboxLabel.setAttribute("fill", "#ef4444");
-        bboxLabel.textContent = `AI CONF: 97.8% ${result}`;
-        aiStatus.innerHTML = `<span class="text-red"><i class="fa-solid fa-skull-crossbones"></i> ${result} RUPTURE RISK</span>`;
+        if (camBadge) camBadge.className = "badge badge-critical";
+        if (seamLine) {
+            seamLine.setAttribute("stroke", "#ef4444");
+            seamLine.setAttribute("stroke-dasharray", "8,8");
+        }
+        if (seamDot) seamDot.setAttribute("fill", "#ef4444");
+        if (bbox) bbox.setAttribute("stroke", "#ef4444");
+        if (bboxLabel) {
+            bboxLabel.setAttribute("fill", "#ef4444");
+            bboxLabel.textContent = `AI CONF: 97.8% ${result}`;
+        }
+        if (aiStatus) aiStatus.innerHTML = `<span class="text-red"><i class="fa-solid fa-skull-crossbones"></i> ${result} RUPTURE RISK</span>`;
     }
 }
 
@@ -371,6 +432,135 @@ function updateActiveJointOnBelt(activeJointId, risk) {
 }
 
 // =========================================================================
+// CHARTS (CHART.JS IMPLEMENTATION)
+// =========================================================================
+
+function initLiveSensorsChart() {
+    const canvas = document.getElementById("liveSensorsChart") || document.getElementById("telemetryChart");
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+
+    liveSensorsChart = new Chart(ctx, {
+        type: "line",
+        data: {
+            labels: [],
+            datasets: [
+                {
+                    label: "Vibration (g x 100)",
+                    borderColor: "#06b6d4",
+                    backgroundColor: "rgba(6, 182, 212, 0.1)",
+                    data: [],
+                    borderWidth: 2,
+                    pointRadius: 2,
+                    tension: 0.3
+                },
+                {
+                    label: "Temperature (°C)",
+                    borderColor: "#f59e0b",
+                    backgroundColor: "rgba(245, 158, 11, 0.1)",
+                    data: [],
+                    borderWidth: 2,
+                    pointRadius: 2,
+                    tension: 0.3
+                },
+                {
+                    label: "Sound (dB)",
+                    borderColor: "#8b5cf6",
+                    backgroundColor: "rgba(139, 92, 246, 0.1)",
+                    data: [],
+                    borderWidth: 2,
+                    pointRadius: 2,
+                    tension: 0.3
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            animation: false,
+            scales: {
+                x: {
+                    grid: { color: "#1e293b" },
+                    ticks: { color: "#64748b", font: { size: 10 } }
+                },
+                y: {
+                    grid: { color: "#1e293b" },
+                    ticks: { color: "#94a3b8", font: { size: 10 } },
+                    suggestedMin: 20,
+                    suggestedMax: 100
+                }
+            },
+            plugins: {
+                legend: {
+                    labels: { color: "#94a3b8", font: { size: 11 } }
+                }
+            }
+        }
+    });
+}
+
+function updateLiveSensorsChart(timestamp, vib, temp, sound) {
+    if (!liveSensorsChart) return;
+    const timeLabel = timestamp ? timestamp.split(" ")[1] : new Date().toLocaleTimeString();
+
+    if (liveSensorsChart.data.labels.length > 15) {
+        liveSensorsChart.data.labels.shift();
+        liveSensorsChart.data.datasets[0].data.shift();
+        liveSensorsChart.data.datasets[1].data.shift();
+        liveSensorsChart.data.datasets[2].data.shift();
+    }
+
+    liveSensorsChart.data.labels.push(timeLabel);
+    liveSensorsChart.data.datasets[0].data.push(vib * 100);
+    liveSensorsChart.data.datasets[1].data.push(temp);
+    liveSensorsChart.data.datasets[2].data.push(sound);
+    liveSensorsChart.update();
+}
+
+function renderPredictiveTrendChart(historyData) {
+    const canvas = document.getElementById("predictiveTrendChart");
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+
+    const labels = historyData.map(h => h.timestamp.split(" ")[0]);
+    const dataPoints = historyData.map(h => h.health_score);
+
+    if (predictiveTrendChart) {
+        predictiveTrendChart.data.labels = labels;
+        predictiveTrendChart.data.datasets[0].data = dataPoints;
+        predictiveTrendChart.update();
+        return;
+    }
+
+    predictiveTrendChart = new Chart(ctx, {
+        type: "line",
+        data: {
+            labels: labels,
+            datasets: [{
+                label: "Health Score Trend (%)",
+                data: dataPoints,
+                borderColor: "#10b981",
+                backgroundColor: "rgba(16, 185, 129, 0.1)",
+                fill: true,
+                tension: 0.3,
+                borderWidth: 2
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                x: { grid: { color: "#1e293b" }, ticks: { color: "#64748b" } },
+                y: { min: 0, max: 100, grid: { color: "#1e293b" }, ticks: { color: "#94a3b8" } }
+            },
+            plugins: {
+                legend: { labels: { color: "#94a3b8" } }
+            }
+        }
+    });
+}
+
+// =========================================================================
 // PREDICTIVE MONITORING & HEALTH TREND
 // =========================================================================
 
@@ -409,28 +599,37 @@ function generateMockJointHistory(jointId) {
 }
 
 function updatePredictiveInsightsUI(jointId, historyData) {
-    document.getElementById("pred-joint-name").innerText = jointId;
+    const pName = document.getElementById("pred-joint-name");
+    if (pName) pName.innerText = jointId;
+
     const latest = historyData[historyData.length - 1];
     if (latest) {
         const health = latest.health_score;
-        document.getElementById("pred-current-health").innerText = `${health.toFixed(1)}%`;
+        const curH = document.getElementById("pred-current-health");
+        if (curH) curH.innerText = `${health.toFixed(1)}%`;
 
         const estDays = Math.max(1, Math.round((health - 30) / 0.5));
         const daysElem = document.getElementById("pred-est-days");
         const recElem = document.getElementById("pred-recommendation");
 
         if (health >= 80) {
-            daysElem.innerText = `${estDays} Days`;
-            daysElem.className = "text-green";
-            recElem.innerHTML = `<i class="fa-solid fa-circle-check text-green"></i> Joint in optimal operating condition. Scheduled routine inspection in 30 days.`;
+            if (daysElem) {
+                daysElem.innerText = `${estDays} Days`;
+                daysElem.className = "text-green";
+            }
+            if (recElem) recElem.innerHTML = `<i class="fa-solid fa-circle-check text-green"></i> Joint in optimal operating condition. Scheduled routine inspection in 30 days.`;
         } else if (health >= 60) {
-            daysElem.innerText = `${estDays} Days`;
-            daysElem.className = "text-yellow";
-            recElem.innerHTML = `<i class="fa-solid fa-triangle-exclamation text-yellow"></i> Minor joint wear detected. Plan maintenance within 2 weeks.`;
+            if (daysElem) {
+                daysElem.innerText = `${estDays} Days`;
+                daysElem.className = "text-yellow";
+            }
+            if (recElem) recElem.innerHTML = `<i class="fa-solid fa-triangle-exclamation text-yellow"></i> Minor joint wear detected. Plan maintenance within 2 weeks.`;
         } else {
-            daysElem.innerText = `< 3 Days (URGENT)`;
-            daysElem.className = "text-red";
-            recElem.innerHTML = `<i class="fa-solid fa-triangle-exclamation text-red"></i> HIGH RISK OF JOINT SEPARATION. Immediate belt shutdown and repair required!`;
+            if (daysElem) {
+                daysElem.innerText = `< 3 Days (URGENT)`;
+                daysElem.className = "text-red";
+            }
+            if (recElem) recElem.innerHTML = `<i class="fa-solid fa-triangle-exclamation text-red"></i> HIGH RISK OF JOINT SEPARATION. Immediate belt shutdown and repair required!`;
         }
     }
 }
@@ -440,8 +639,10 @@ function updatePredictiveInsightsUI(jointId, historyData) {
 // =========================================================================
 
 async function applyHistoryFilters() {
-    const jFilter = document.getElementById("filter-joint").value;
-    const rFilter = document.getElementById("filter-risk").value;
+    const jFilterElem = document.getElementById("filter-joint");
+    const rFilterElem = document.getElementById("filter-risk");
+    const jFilter = jFilterElem ? jFilterElem.value : "ALL";
+    const rFilter = rFilterElem ? rFilterElem.value : "ALL";
 
     try {
         const url = `/api/history?joint_id=${jFilter}&risk=${rFilter}`;
@@ -463,7 +664,7 @@ async function applyHistoryFilters() {
 }
 
 function renderHistoryTable(records) {
-    const tbody = document.getElementById("history-table-body");
+    const tbody = document.getElementById("history-table-body") || document.getElementById("master-joints-tbody");
     if (!tbody) return;
     tbody.innerHTML = "";
 
@@ -496,7 +697,17 @@ function renderHistoryTable(records) {
 }
 
 function exportHistoryCSV() {
-    alert("Exporting CSV inspection log...");
+    let csvContent = "data:text/csv;charset=utf-8,Timestamp,Joint_ID,Temp_C,Vib_g,Sound_dB,Speed_mps,Camera,Health_Score,Risk\n";
+    clientState.history.forEach(r => {
+        csvContent += `${r.timestamp},${r.joint_id},${r.temperature_c},${r.vibration_g},${r.sound_db},${r.belt_speed_mps},${r.camera_result},${r.health_score},${r.risk_level}\n`;
+    });
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", `smart_belt_inspection_${Date.now()}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
 }
 
 // =========================================================================
