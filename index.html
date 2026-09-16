@@ -341,7 +341,39 @@
                 </table>
             </div>
         </section>
-
+    <!-- 30-DAY AI PERIODIC TREND REPORT MODAL -->
+        <div id="trendReportModal" class="report-modal hidden">
+            <div class="report-modal-content">
+                <div class="report-modal-header">
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <i class="fa-solid fa-microchip" style="color: var(--accent-cyan);"></i>
+                        <h3 id="reportModalTitle">30-Day Periodic AI Splice Report</h3>
+                    </div>
+                    <button class="close-report-btn" onclick="closeTrendReport()">&times;</button>
+                </div>
+                <div class="report-modal-body">
+                    <div class="report-alert-badge" id="reportSummaryBadge">NORMAL FATIGUE RATE</div>
+                    <p id="reportSummaryText" style="margin-top: 10px; font-size: 13px; color: #cbd5e1; line-height: 1.6;"></p>
+                    <div class="report-cycle-stats">
+                        <div class="stat-box">
+                            <span class="stat-label">30-Day Wear Rate:</span>
+                            <span class="stat-val" id="reportWearRate">-2.8% / cycle</span>
+                        </div>
+                        <div class="stat-box">
+                            <span class="stat-label">Projected Runway:</span>
+                            <span class="stat-val" id="reportEstDays">120 Days</span>
+                        </div>
+                        <div class="stat-box">
+                            <span class="stat-label">Next Inspection:</span>
+                            <span class="stat-val" id="reportNextDate">In 30 Days</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="report-modal-footer">
+                    <button class="btn btn-secondary" onclick="closeTrendReport()">Acknowledge</button>
+                </div>
+            </div>
+        </div> 
     </main>
 
     <!-- Connect the controller and simulation script -->
