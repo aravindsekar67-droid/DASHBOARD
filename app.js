@@ -58,7 +58,7 @@ document.addEventListener("DOMContentLoaded", () => {
     initLiveSensorsChart();
     initConveyorBeltTrack();
     fetchTelemetry();
-    loadJointPredictiveTrend("J001");
+    loadJointPredictiveTrend("J001", false); // Do not pop up modal automatically on initial load
     applyHistoryFilters();
 
     // Poll current telemetry every 1.2 seconds
@@ -566,27 +566,26 @@ function renderPredictiveTrendChart(historyData) {
 }
 
 // =========================================================================
-// PREDICTIVE MONITORING & HEALTH TREND (30-DAY INTERVAL LOGIC)
+// PREDICTIVE MONITORING & 30-DAY AI TREND ANALYSIS
 // =========================================================================
 
-async function loadJointPredictiveTrend(jointId) {
+async function loadJointPredictiveTrend(jointId, showReportModal = true) {
     try {
         const res = await fetch(`/api/joints/${jointId}/history`);
         if (res.ok) {
             const json = await res.json();
             if (json.success && json.history) {
                 renderPredictiveTrendChart(json.history);
-                updatePredictiveInsightsUI(jointId, json.history);
+                updatePredictiveInsightsUI(jointId, json.history, showReportModal);
                 return;
             }
         }
     } catch (err) {}
 
     // Fallback for static hosting using 30-day periodic intervals
-    const filtered = clientState.history.filter(h => h.joint_id === jointId);
     const historyData = generateMockJointHistory(jointId);
     renderPredictiveTrendChart(historyData);
-    updatePredictiveInsightsUI(jointId, historyData);
+    updatePredictiveInsightsUI(jointId, historyData, showReportModal);
 }
 
 // Generates periodic historical inspections sampled every 30 days (6 intervals)
@@ -614,40 +613,91 @@ function generateMockJointHistory(jointId) {
     return mock;
 }
 
-function updatePredictiveInsightsUI(jointId, historyData) {
+function updatePredictiveInsightsUI(jointId, historyData, showReportModal = true) {
     const pName = document.getElementById("pred-joint-name");
     if (pName) pName.innerText = jointId;
 
+    if (!historyData || historyData.length < 2) return;
+
     const latest = historyData[historyData.length - 1];
-    if (latest) {
-        const health = latest.health_score;
-        const curH = document.getElementById("pred-current-health");
-        if (curH) curH.innerText = `${health.toFixed(1)}%`;
+    const previous = historyData[historyData.length - 2];
+    const health = latest.health_score;
 
-        const estDays = Math.max(1, Math.round((health - 30) / 0.5));
-        const daysElem = document.getElementById("pred-est-days");
-        const recElem = document.getElementById("pred-recommendation");
+    // Calculate wear degradation across the 30-day interval
+    const wear30Day = parseFloat((previous.health_score - health).toFixed(1));
+    const curH = document.getElementById("pred-current-health");
+    if (curH) curH.innerText = `${health.toFixed(1)}%`;
 
-        if (health >= 80) {
-            if (daysElem) {
-                daysElem.innerText = `${estDays} Days`;
-                daysElem.className = "text-green";
-            }
-            if (recElem) recElem.innerHTML = `<i class="fa-solid fa-circle-check text-green"></i> Joint in optimal operating condition. Next routine ultrasonic scan in 30 days.`;
-        } else if (health >= 60) {
-            if (daysElem) {
-                daysElem.innerText = `${estDays} Days`;
-                daysElem.className = "text-yellow";
-            }
-            if (recElem) recElem.innerHTML = `<i class="fa-solid fa-triangle-exclamation text-yellow"></i> Splice fatigue accelerated in last 30 days. Plan preventive splice re-vulcanization.`;
-        } else {
-            if (daysElem) {
-                daysElem.innerText = `< 3 Days (URGENT)`;
-                daysElem.className = "text-red";
-            }
-            if (recElem) recElem.innerHTML = `<i class="fa-solid fa-triangle-exclamation text-red"></i> CRITICAL SPLICE DEGRADATION DETECTED. Immediate belt shutdown and overhaul required!`;
+    const estDays = Math.max(1, Math.round((health - 30) / (wear30Day > 0 ? wear30Day / 30 : 0.1)));
+    const daysElem = document.getElementById("pred-est-days");
+    const recElem = document.getElementById("pred-recommendation");
+
+    if (health >= 80) {
+        if (daysElem) {
+            daysElem.innerText = `${estDays} Days`;
+            daysElem.className = "text-green";
         }
+        if (recElem) recElem.innerHTML = `<i class="fa-solid fa-circle-check text-green"></i> 30-Day Trend Normal: Steady ${wear30Day}% wear per 30-day cycle. Scheduled routine scan in 30 days.`;
+    } else if (health >= 60) {
+        if (daysElem) {
+            daysElem.innerText = `${estDays} Days`;
+            daysElem.className = "text-yellow";
+        }
+        if (recElem) recElem.innerHTML = `<i class="fa-solid fa-triangle-exclamation text-yellow"></i> 30-Day Trend Warning: Splice degradation accelerated by ${wear30Day}%. Schedule vulcanization audit.`;
+    } else {
+        if (daysElem) {
+            daysElem.innerText = `< 3 Days (URGENT)`;
+            daysElem.className = "text-red";
+        }
+        if (recElem) recElem.innerHTML = `<i class="fa-solid fa-triangle-exclamation text-red"></i> 30-Day Critical Trip: Fatigue degradation breached safe limits. Immediate interlock shutdown!`;
     }
+
+    // Trigger AI notification report for this joint if user selected it
+    if (showReportModal) {
+        trigger30DayAIReport(jointId, health, wear30Day, estDays);
+    }
+}
+
+function trigger30DayAIReport(jointId, currentHealth, wearRate, remainingDays) {
+    const modal = document.getElementById("trendReportModal");
+    if (!modal) return;
+
+    const title = document.getElementById("reportModalTitle");
+    const badge = document.getElementById("reportSummaryBadge");
+    const text = document.getElementById("reportSummaryText");
+    const wearVal = document.getElementById("reportWearRate");
+    const estVal = document.getElementById("reportEstDays");
+
+    if (title) title.innerText = `30-Day AI Trend Audit: ${jointId}`;
+    if (wearVal) wearVal.innerText = `-${wearRate}% / cycle`;
+    if (estVal) estVal.innerText = `${remainingDays} Days`;
+
+    if (currentHealth >= 80) {
+        badge.className = "report-alert-badge";
+        badge.style.borderColor = "#10b981";
+        badge.style.color = "#10b981";
+        badge.innerText = "NORMAL 30-DAY WEAR RATE";
+        text.innerText = `AI Analysis: Joint ${jointId} degradation over the last 30 days is consistent with nominal mechanical wear (${wearRate}% reduction). Core vulcanized splice layers remain intact. Routine continuous monitoring remains active.`;
+    } else if (currentHealth >= 60) {
+        badge.className = "report-alert-badge";
+        badge.style.borderColor = "#f59e0b";
+        badge.style.color = "#f59e0b";
+        badge.innerText = "ACCELERATED SPLICE FATIGUE";
+        text.innerText = `AI Advisory: Joint ${jointId} is exhibiting accelerated splice fatigue. Vibration and micro-fissure expansion rates have increased by ${wearRate}% across the 30-day baseline. Re-inspection recommended within 14 days.`;
+    } else {
+        badge.className = "report-alert-badge";
+        badge.style.borderColor = "#ef4444";
+        badge.style.color = "#ef4444";
+        badge.innerText = "CRITICAL SEPARATION HAZARD";
+        text.innerText = `AI Urgent Dispatch: Joint ${jointId} has degraded by ${wearRate}% over the cycle and breached the 30% structural threshold. Risk of catastrophic conveyor belt tear is elevated. Belt speed should be reduced immediately.`;
+    }
+
+    modal.classList.remove("hidden");
+}
+
+function closeTrendReport() {
+    const modal = document.getElementById("trendReportModal");
+    if (modal) modal.classList.add("hidden");
 }
 
 // =========================================================================
