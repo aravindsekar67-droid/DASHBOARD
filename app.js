@@ -104,7 +104,6 @@ async function fetchTelemetry() {
             return;
         }
     } catch (err) {
-        // Fallback to Client Simulation Mode (Works on GitHub Pages)
         runClientTelemetrySimulation();
     }
 }
@@ -567,7 +566,7 @@ function renderPredictiveTrendChart(historyData) {
 }
 
 // =========================================================================
-// PREDICTIVE MONITORING & HEALTH TREND
+// PREDICTIVE MONITORING & HEALTH TREND (30-DAY INTERVAL LOGIC)
 // =========================================================================
 
 async function loadJointPredictiveTrend(jointId) {
@@ -583,22 +582,33 @@ async function loadJointPredictiveTrend(jointId) {
         }
     } catch (err) {}
 
-    // Fallback for static hosting
+    // Fallback for static hosting using 30-day periodic intervals
     const filtered = clientState.history.filter(h => h.joint_id === jointId);
-    const historyData = filtered.length > 0 ? filtered : generateMockJointHistory(jointId);
+    const historyData = generateMockJointHistory(jointId);
     renderPredictiveTrendChart(historyData);
     updatePredictiveInsightsUI(jointId, historyData);
 }
 
+// Generates periodic historical inspections sampled every 30 days (6 intervals)
 function generateMockJointHistory(jointId) {
     const mock = [];
     const now = Date.now();
-    for (let i = 0; i < 8; i++) {
-        const d = new Date(now - (8 - i) * 86400000);
+    const thirtyDaysMs = 30 * 86400000;
+    
+    // Seed slight offset variance based on joint number
+    const jNum = parseInt(jointId.replace("J", ""), 10) || 1;
+    const baseHealth = 98 - (jNum % 4) * 1.5;
+
+    for (let i = 0; i < 6; i++) {
+        // Step back in 30-day blocks
+        const d = new Date(now - (5 - i) * thirtyDaysMs);
+        const degradation = (i * 2.8) + (Math.random() * 1.2 - 0.6);
+        const score = parseFloat(Math.min(100, Math.max(35, baseHealth - degradation)).toFixed(1));
+
         mock.push({
             timestamp: d.toISOString().split('T')[0],
             joint_id: jointId,
-            health_score: Math.min(100, Math.max(40, 96 - i * 1.5 + (Math.random() * 2 - 1)))
+            health_score: score
         });
     }
     return mock;
@@ -623,19 +633,19 @@ function updatePredictiveInsightsUI(jointId, historyData) {
                 daysElem.innerText = `${estDays} Days`;
                 daysElem.className = "text-green";
             }
-            if (recElem) recElem.innerHTML = `<i class="fa-solid fa-circle-check text-green"></i> Joint in optimal operating condition. Scheduled routine inspection in 30 days.`;
+            if (recElem) recElem.innerHTML = `<i class="fa-solid fa-circle-check text-green"></i> Joint in optimal operating condition. Next routine ultrasonic scan in 30 days.`;
         } else if (health >= 60) {
             if (daysElem) {
                 daysElem.innerText = `${estDays} Days`;
                 daysElem.className = "text-yellow";
             }
-            if (recElem) recElem.innerHTML = `<i class="fa-solid fa-triangle-exclamation text-yellow"></i> Minor joint wear detected. Plan maintenance within 2 weeks.`;
+            if (recElem) recElem.innerHTML = `<i class="fa-solid fa-triangle-exclamation text-yellow"></i> Splice fatigue accelerated in last 30 days. Plan preventive splice re-vulcanization.`;
         } else {
             if (daysElem) {
                 daysElem.innerText = `< 3 Days (URGENT)`;
                 daysElem.className = "text-red";
             }
-            if (recElem) recElem.innerHTML = `<i class="fa-solid fa-triangle-exclamation text-red"></i> HIGH RISK OF JOINT SEPARATION. Immediate belt shutdown and repair required!`;
+            if (recElem) recElem.innerHTML = `<i class="fa-solid fa-triangle-exclamation text-red"></i> CRITICAL SPLICE DEGRADATION DETECTED. Immediate belt shutdown and overhaul required!`;
         }
     }
 }
