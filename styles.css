@@ -923,3 +923,101 @@ input:checked + .slider:before {
         overflow-x: auto;
     }
 }
+/* 30-Day AI Report Modal */
+.report-modal {
+    position: fixed;
+    top: 0; left: 0; width: 100vw; height: 100vh;
+    background: rgba(11, 15, 25, 0.85);
+    backdrop-filter: blur(4px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+}
+
+.report-modal.hidden {
+    display: none !important;
+}
+
+.report-modal-content {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 10px;
+    width: 90%;
+    max-width: 520px;
+    box-shadow: var(--glass-shadow);
+    overflow: hidden;
+}
+
+.report-modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 14px 20px;
+    background: #0f172a;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.report-modal-header h3 {
+    font-size: 14px;
+    font-weight: 700;
+}
+
+.close-report-btn {
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    font-size: 20px;
+    cursor: pointer;
+}
+
+.report-modal-body {
+    padding: 20px;
+}
+
+.report-alert-badge {
+    display: inline-block;
+    padding: 4px 10px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    background: rgba(16, 185, 129, 0.2);
+    color: var(--status-normal);
+    border: 1px solid var(--status-normal);
+}
+
+.report-cycle-stats {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+    margin-top: 16px;
+    background: #0f172a;
+    padding: 12px;
+    border-radius: 6px;
+    border: 1px solid var(--border-color);
+}
+
+.stat-box {
+    display: flex;
+    flex-direction: column;
+}
+
+.stat-label {
+    font-size: 10px;
+    color: var(--text-muted);
+}
+
+.stat-val {
+    font-family: var(--font-digital);
+    font-size: 13px;
+    color: var(--accent-cyan);
+    margin-top: 2px;
+}
+
+.report-modal-footer {
+    display: flex;
+    justify-content: flex-end;
+    padding: 12px 20px;
+    border-top: 1px solid rgba(255, 255, 255, 0.05);
+}
