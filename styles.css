@@ -498,7 +498,7 @@ input:checked + .slider:before {
 
 /* ==========================================================================
    CONVEYOR BELT VISUALIZATION
-   ========================================================================== */
+   ========================================================================= */
 
 .conveyor-viz-section {
     background: var(--bg-card);
@@ -875,6 +875,12 @@ input:checked + .slider:before {
     0% { opacity: 0.4; transform: scale(0.9); }
     50% { opacity: 1; transform: scale(1.1); }
     100% { opacity: 0.4; transform: scale(0.9); }
+}
+
+@keyframes pulse-red-border {
+    0% { box-shadow: 0 0 5px rgba(239, 68, 68, 0.4); }
+    50% { box-shadow: 0 0 20px rgba(239, 68, 68, 0.8); }
+    100% { box-shadow: 0 0 5px rgba(239, 68, 68, 0.4); }
 }
 
 @keyframes flash-alarm {
