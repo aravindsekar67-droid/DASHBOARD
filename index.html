@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SMART-BELT AI — Industrial Conveyor Monitoring System</title>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Orbitron:wght@600;800;900&display=swap" rel="stylesheet">
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Chart.js CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Local Styles -->
+    <link rel="stylesheet" href="/styles.css">
+</head>
+<body class="industrial-theme">
+
+    <!-- Header Navigation Bar -->
+    <header class="app-header">
+        <div class="header-left">
+            <div class="logo-box">
+                <i class="fa-solid fa-conveyor-belt logo-icon"></i>
+                <div class="logo-text">
+                    <h1>SMART-BELT <span class="ai-badge">AI 2.0</span></h1>
+                    <span class="sub-text">Predictive Conveyor Joint Inspector</span>
+                </div>
+            </div>
+            <div class="system-status-pill">
+                <span class="status-dot online"></span>
+                <span id="system-mode-text">SYSTEM ONLINE (DEMO MODE)</span>
+            </div>
+        </div>
+
+        <div class="header-center">
+            <div class="conveyor-controls">
+                <button class="btn btn-start" onclick="sendConveyorControl('START')">
+                    <i class="fa-solid fa-play"></i> Start Belt
+                </button>
+                <button class="btn btn-stop" onclick="sendConveyorControl('STOP')">
+                    <i class="fa-solid fa-pause"></i> Pause Belt
+                </button>
+                <button class="btn btn-emergency" onclick="sendConveyorControl('EMERGENCY_STOP')">
+                    <i class="fa-solid fa-power-off"></i> E-STOP
+                </button>
+                <button class="btn btn-simulate-fault" onclick="triggerSimulatedFault()">
+                    <i class="fa-solid fa-bolt"></i> Inject Fault
+                </button>
+            </div>
+        </div>
+
+        <div class="header-right">
+            <div class="toggle-mode-box">
+                <span>Hardware API</span>
+                <label class="switch">
+                    <input type="checkbox" id="demo-mode-toggle" onchange="toggleDemoMode(this.checked)" checked>
+                    <span class="slider"></span>
+                </label>
+                <span>Demo Mode</span>
+            </div>
+        </div>
+    </header>
+
+    <!-- Critical Alarm Banner -->
+    <div id="critical-alarm-banner" class="alarm-banner hidden">
+        <div class="alarm-icon-box">
+            <i class="fa-solid fa-triangle-exclamation"></i>
+        </div>
+        <div class="alarm-content">
+            <h3 id="alarm-title">CRITICAL ALARM: JOINT FAULT</h3>
+            <p id="alarm-message">High vibration anomaly and visual seam separation detected!</p>
+        </div>
+        <div class="alarm-actions">
+            <button class="btn btn-ack" onclick="acknowledgeAlert()">
+                <i class="fa-solid fa-bell-slash"></i> Acknowledge Alarm
+            </button>
+            <button class="btn btn-emergency-small" onclick="sendConveyorControl('EMERGENCY_STOP')">
+                <i class="fa-solid fa-ban"></i> EMERGENCY SHUTDOWN
+            </button>
+        </div>
+    </div>
+
+    <!-- Main Dashboard Container -->
+    <main class="dashboard-container">
+
+        <!-- Top KPI Metric Cards Grid -->
+        <section class="kpi-grid">
+            
+            <!-- Conveyor Status Card -->
+            <div class="kpi-card highlight-cyan">
+                <div class="kpi-header">
+                    <span><i class="fa-solid fa-gauge-high"></i> CONVEYOR STATUS</span>
+                    <span id="badge-conveyor-status" class="badge badge-normal">RUNNING</span>
+                </div>
+                <div class="kpi-body">
+                    <div id="kpi-status-text" class="big-value">RUNNING</div>
+                    <div class="sub-value">Speed: <strong id="kpi-speed" class="text-cyan">1.85</strong> m/s</div>
+                </div>
+            </div>
+
+            <!-- Active Joint RFID Card -->
+            <div class="kpi-card highlight-cyan">
+                <div class="kpi-header">
+                    <span><i class="fa-solid fa-fingerprint"></i> ACTIVE JOINT</span>
+                    <span id="kpi-rfid-tag" class="tag-id">RFID-E200001</span>
+                </div>
+                <div class="kpi-body">
+                    <div id="kpi-joint-id" class="big-value joint-id-text">J001</div>
+                    <div class="sub-value">Last Inspected: <span id="kpi-last-time">Just now</span></div>
+                </div>
+            </div>
+
+            <!-- Temperature Card -->
+            <div class="kpi-card">
+                <div class="kpi-header">
+                    <span><i class="fa-solid fa-temperature-half"></i> TEMPERATURE</span>
+                    <span class="mini-sensor-id">DS18B20</span>
+                </div>
+                <div class="kpi-body">
+                    <div id="kpi-temp" class="big-value">38.5 <span class="unit">°C</span></div>
+                    <div class="progress-bar-container">
+                        <div id="temp-progress" class="progress-bar-fill temp-bar" style="width: 42%;"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Vibration Card -->
+            <div class="kpi-card">
+                <div class="kpi-header">
+                    <span><i class="fa-solid fa-wave-square"></i> VIBRATION</span>
+                    <span class="mini-sensor-id">MPU6050</span>
+                </div>
+                <div class="kpi-body">
+                    <div id="kpi-vib" class="big-value">0.45 <span class="unit">g</span></div>
+                    <div class="progress-bar-container">
+                        <div id="vib-progress" class="progress-bar-fill vib-bar" style="width: 25%;"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Acoustic Level Card -->
+            <div class="kpi-card">
+                <div class="kpi-header">
+                    <span><i class="fa-solid fa-volume-high"></i> ACOUSTICS</span>
+                    <span class="mini-sensor-id">MAX4466</span>
+                </div>
+                <div class="kpi-body">
+                    <div id="kpi-sound" class="big-value">62.0 <span class="unit">dB</span></div>
+                    <div class="progress-bar-container">
+                        <div id="sound-progress" class="progress-bar-fill sound-bar" style="width: 55%;"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Health Score Gauge Card -->
+            <div class="kpi-card">
+                <div class="kpi-header">
+                    <span><i class="fa-solid fa-heart-pulse"></i> JOINT HEALTH</span>
+                    <span id="badge-risk-level" class="badge badge-normal">LOW RISK</span>
+                </div>
+                <div class="kpi-body health-gauge-box">
+                    <div class="gauge-container">
+                        <svg class="gauge-svg" viewBox="0 0 100 50">
+                            <!-- Background Arc -->
+                            <path d="M 10 50 A 40 40 0 0 1 90 50" fill="none" stroke="#334155" stroke-width="10" stroke-linecap="round"/>
+                            <!-- Fill Arc -->
+                            <path id="gauge-fill-path" d="M 10 50 A 40 40 0 0 1 90 50" fill="none" stroke="#10b981" stroke-width="10" stroke-linecap="round" stroke-dasharray="126" stroke-dashoffset="12.6"/>
+                        </svg>
+                        <div class="gauge-text">
+                            <span id="kpi-health-score" class="gauge-number">94.2</span><span class="gauge-unit">%</span>
+                        </div>
+                    </div>
+                    <div id="health-band-name" class="health-band-indicator text-green">NORMAL (80-100%)</div>
+                </div>
+            </div>
+
+        </section>
+
+        <!-- Conveyor Belt Live Movement Graphic -->
+        <section class="conveyor-viz-section">
+            <div class="viz-header">
+                <h3><i class="fa-solid fa-arrows-left-right"></i> REAL-TIME CONVEYOR BELT TRACK VISUALIZER</h3>
+                <div class="viz-stats-pills">
+                    <span class="stat-pill">Total Inspected: <strong id="stat-total-inspected">148</strong></span>
+                    <span class="stat-pill warning">Warnings: <strong id="stat-warnings">3</strong></span>
+                    <span class="stat-pill danger">Critical: <strong id="stat-criticals">1</strong></span>
+                </div>
+            </div>
+            <div class="conveyor-graphic-box">
+                <div class="roller roller-left"></div>
+                <div class="belt-track">
+                    <div id="belt-surface" class="belt-surface">
+                        <!-- Markers dynamically populated by JS -->
+                    </div>
+                </div>
+                <div class="roller roller-right"></div>
+                
+                <!-- Sensor Scanning Station Gate -->
+                <div class="sensor-station-arch">
+                    <div class="sensor-head"><i class="fa-solid fa-camera"></i> ESP32-CAM</div>
+                    <div class="sensor-head"><i class="fa-solid fa-tower-broadcast"></i> RFID</div>
+                </div>
+                <div class="scan-beam"></div>
+            </div>
+        </section>
+
+        <!-- Analysis Section Grid (ESP32-CAM Stream + Live Sensors Waveform) -->
+        <section class="analysis-grid">
+            
+            <!-- ESP32-CAM Visual Inspection View -->
+            <div class="panel-box">
+                <div class="panel-header">
+                    <h3><i class="fa-solid fa-eye"></i> ESP32-CAM VISUAL SEAM INSPECTOR</h3>
+                    <span id="camera-result-badge" class="badge badge-normal">NORMAL</span>
+                </div>
+                <div class="camera-body">
+                    <div class="cam-feed-container">
+                        <svg class="cam-svg-render" viewBox="0 0 400 220">
+                            <!-- Background Dark Camera Feed Canvas -->
+                            <rect width="400" height="220" fill="#0b1120"/>
+                            
+                            <!-- Belt Rubber Texture Lines -->
+                            <line x1="0" y1="30" x2="400" y2="30" stroke="#1e293b" stroke-width="2"/>
+                            <line x1="0" y1="190" x2="400" y2="190" stroke="#1e293b" stroke-width="2"/>
+                            
+                            <!-- Belt Splice Seam Line -->
+                            <line id="cam-seam-line" x1="200" y1="20" x2="200" y2="200" stroke="#10b981" stroke-width="4"/>
+                            <circle id="cam-seam-dot" cx="200" cy="110" r="6" fill="#10b981"/>
+
+                            <!-- AI Detection Bounding Box -->
+                            <rect id="cam-bbox" x="160" y="50" width="80" height="120" fill="none" stroke="#10b981" stroke-width="2" stroke-dasharray="4,4"/>
+                            <text id="cam-bbox-label" x="165" y="45" fill="#10b981" font-size="10" font-family="Orbitron">AI CONF: 98.6% NORMAL</text>
+
+                            <!-- Camera Overlay Telemetry Text -->
+                            <text x="15" y="25" fill="#06b6d4" font-size="11" font-family="Orbitron" id="cam-overlay-rfid">JOINT: J001</text>
+                            <text x="15" y="205" fill="#94a3b8" font-size="10" font-family="Inter" id="cam-overlay-time">STREAM: LIVE FPS: 30.0</text>
+                        </svg>
+                    </div>
+                    <div class="camera-info-row">
+                        <span>Target Joint: <strong id="cam-joint-id-text">J001</strong></span>
+                        <span>Vision Diagnosis: <strong id="cam-result-text">NORMAL</strong></span>
+                    </div>
+                    <div id="cam-ai-status" class="sub-value" style="text-align: center;">
+                        <span class="text-green"><i class="fa-solid fa-circle-check"></i> NO DAMAGE DETECTED</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Live Sensor Waveforms Chart -->
+            <div class="panel-box">
+                <div class="panel-header">
+                    <h3><i class="fa-solid fa-chart-line"></i> LIVE MULTI-SENSOR TELEMETRY WAVEFORM</h3>
+                    <span class="live-pulse"><i class="fa-solid fa-circle"></i> REALTIME STREAM</span>
+                </div>
+                <div style="position: relative; height: 260px; width: 100%;">
+                    <canvas id="liveSensorsChart"></canvas>
+                </div>
+            </div>
+
+        </section>
+
+        <!-- Predictive Analytics & Historical Health Trend Section -->
+        <section class="panel-box predictive-section">
+            <div class="width-100">
+                <div class="panel-header header-with-select">
+                    <h3><i class="fa-solid fa-brain"></i> AI PREDICTIVE HEALTH TREND & DEGRADATION ANALYSIS</h3>
+                    <div class="joint-select-box">
+                        <label for="select-joint-predictive">Select Joint:</label>
+                        <select id="select-joint-predictive" onchange="loadJointPredictiveTrend(this.value)">
+                            <option value="J001" selected>Joint J001</option>
+                            <option value="J002">Joint J002</option>
+                            <option value="J003">Joint J003</option>
+                            <option value="J004">Joint J004</option>
+                            <option value="J005">Joint J005</option>
+                            <option value="J006">Joint J006</option>
+                            <option value="J007">Joint J007</option>
+                            <option value="J008">Joint J008</option>
+                            <option value="J009">Joint J009</option>
+                            <option value="J010">Joint J010</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="predictive-body">
+                    <div style="position: relative; height: 230px;">
+                        <canvas id="predictiveTrendChart"></canvas>
+                    </div>
+
+                    <div class="predictive-insights-card">
+                        <h4><i class="fa-solid fa-lightbulb"></i> Predictive Maintenance AI Insights</h4>
+                        <div class="insight-metric">
+                            <span class="label">Target Joint:</span>
+                            <span id="pred-joint-name" class="value text-cyan">J001</span>
+                        </div>
+                        <div class="insight-metric">
+                            <span class="label">Current Health:</span>
+                            <span id="pred-current-health" class="value text-green">94.2%</span>
+                        </div>
+                        <div class="insight-metric">
+                            <span class="label">Est. RUL (Remaining Life):</span>
+                            <span id="pred-est-days" class="value text-green">128 Days</span>
+                        </div>
+                        <div id="pred-recommendation" class="insight-recommendation">
+                            <i class="fa-solid fa-circle-check text-green"></i> Joint in optimal operating condition. Scheduled routine inspection in 30 days.
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- History Log Table Section -->
+        <section class="panel-box history-table-section">
+            <div class="panel-header header-with-select">
+                <h3><i class="fa-solid fa-clock-rotate-left"></i> CONVEYOR INSPECTION LOG HISTORY</h3>
+                <div class="table-filter-bar">
+                    <div class="filter-item">
+                        <label for="filter-joint">Joint:</label>
+                        <select id="filter-joint">
+                            <option value="ALL">All Joints</option>
+                            <option value="J001">J001</option>
+                            <option value="J002">J002</option>
+                            <option value="J003">J003</option>
+                            <option value="J004">J004</option>
+                            <option value="J005">J005</option>
+                        </select>
+                    </div>
+                    <div class="filter-item">
+                        <label for="filter-risk">Risk:</label>
+                        <select id="filter-risk">
+                            <option value="ALL">All Severities</option>
+                            <option value="NORMAL">NORMAL</option>
+                            <option value="WARNING">WARNING</option>
+                            <option value="CRITICAL">CRITICAL</option>
+                        </select>
+                    </div>
+                    <div class="filter-item">
+                        <label for="filter-date">Date:</label>
+                        <input type="date" id="filter-date">
+                    </div>
+                    <button class="btn btn-secondary" onclick="applyHistoryFilters()">
+                        <i class="fa-solid fa-filter"></i> Apply
+                    </button>
+                    <button class="btn btn-secondary" onclick="exportHistoryCSV()">
+                        <i class="fa-solid fa-file-csv"></i> Export CSV
+                    </button>
+                </div>
+            </div>
+
+            <div class="table-responsive">
+                <table class="history-table">
+                    <thead>
+                        <tr>
+                            <th>Timestamp</th>
+                            <th>Joint ID</th>
+                            <th>Temp (°C)</th>
+                            <th>Vibration (g)</th>
+                            <th>Sound (dB)</th>
+                            <th>Speed (m/s)</th>
+                            <th>Camera Result</th>
+                            <th>Health Score</th>
+                            <th>Risk Level</th>
+                        </tr>
+                    </thead>
+                    <tbody id="history-table-body">
+                        <!-- Populated by JS -->
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- JavaScript Files -->
+    <script src="/charts.js"></script>
+    <script src="/app (2).js"></script>
+</body>
+</html>
