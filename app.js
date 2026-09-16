@@ -70,6 +70,12 @@ document.addEventListener("DOMContentLoaded", () => {
 // =========================================================================
 
 async function fetchTelemetry() {
+    // If running on GitHub Pages or local static file, directly bypass API server
+    if (window.location.hostname.includes("github.io") || window.location.protocol === "file:") {
+        runClientTelemetrySimulation();
+        return;
+    }
+
     try {
         const res = await fetch("/api/sensors");
         if (!res.ok) throw new Error("API server offline, falling back to client mode");
